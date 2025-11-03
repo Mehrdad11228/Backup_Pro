@@ -13,6 +13,8 @@ function install_requirements() {
     apt install tar gzip -y
     apt install p7zip-full -y
     apt install mariadb-client -y
+    sudo apt update
+    sudo apt install xz-utils zstd -y
 }
 
 # ----- Install Backuper -----
@@ -27,12 +29,16 @@ function install_backuper() {
     echo "1) zip"
     echo "2) tgz"
     echo "3) 7z"
+    echo "4) XZ"
+    echo "5) ZSTD"
     read -p "Choose (1-3): " COMP_TYPE_OPT
 
     case $COMP_TYPE_OPT in
-        1) COMP_TYPE="zip" ;;
-        2) COMP_TYPE="tgz" ;;
-        3) COMP_TYPE="7z" ;;
+       1) COMP_TYPE="zip" ;;
+       2) COMP_TYPE="tgz" ;;
+       3) COMP_TYPE="7z" ;;
+       4) COMP_TYPE="xz" ;;
+       5) COMP_TYPE="zstd" ;;
         *) echo "Invalid choice. Default: zip"; COMP_TYPE="zip" ;;
     esac
 
@@ -58,35 +64,35 @@ function install_backuper() {
     BACKUP_DIR="/root/backuper_marzneshin"
 
     # Create backup script
-    cat > $BACKUP_SCRIPT <<EOF
+    cat > $BACKUP_SCRIPT <<'EOF'
 #!/bin/bash
-BACKUP_DIR="$BACKUP_DIR"
-BOT_TOKEN="$BOT_TOKEN"
-CHAT_ID="$CHAT_ID"
-CAPTION="$CAPTION"
-COMP_TYPE="$COMP_TYPE"
-DATE=\$(date +"%Y-%m-%d_%H-%M-%S")
-OUTPUT_BASE="\$BACKUP_DIR/backup_\$DATE"
+BACKUP_DIR="/root/backuper_marzneshin"
+BOT_TOKEN="__BOT_TOKEN__"
+CHAT_ID="__CHAT_ID__"
+CAPTION="__CAPTION__"
+COMP_TYPE="__COMP_TYPE__"
+DATE=$(date +"%Y-%m-%d_%H-%M-%S")
+OUTPUT_BASE="$BACKUP_DIR/backup_$DATE"
 
-mkdir -p \$BACKUP_DIR
-cd \$BACKUP_DIR
+mkdir -p "$BACKUP_DIR"
+cd "$BACKUP_DIR"
 
 # Copy paths
 mkdir -p etc_opt var_lib_marznode var_lib_marzneshin
-cp -r /etc/opt/marzneshin/ etc_opt/
-cp -r /var/lib/marznode/ var_lib_marznode/
-rsync -a --exclude='mysql' /var/lib/marzneshin/ var_lib_marzneshin/
+cp -r /etc/opt/marzneshin/ etc_opt/ 2>/dev/null
+cp -r /var/lib/marznode/ var_lib_marznode/ 2>/dev/null
+rsync -a --exclude='mysql' /var/lib/marzneshin/ var_lib_marzneshin/ 2>/dev/null
 
 # ----- MySQL Backup -----
 DOCKER_COMPOSE="/etc/opt/marzneshin/docker-compose.yml"
-if [ -f "\$DOCKER_COMPOSE" ]; then
-    DB_PASS=\$(grep 'MARIADB_ROOT_PASSWORD:' "\$DOCKER_COMPOSE" | awk -F': ' '{print \$2}' | tr -d ' "')
-    DB_NAME=\$(grep 'MARIADB_DATABASE:' "\$DOCKER_COMPOSE" | awk -F': ' '{print \$2}' | tr -d ' "')
+if [ -f "$DOCKER_COMPOSE" ]; then
+    DB_PASS=$(grep 'MARIADB_ROOT_PASSWORD:' "$DOCKER_COMPOSE" | awk -F': ' '{print $2}' | tr -d ' "')
+    DB_NAME=$(grep 'MARIADB_DATABASE:' "$DOCKER_COMPOSE" | awk -F': ' '{print $2}' | tr -d ' "')
     DB_USER="root"
 
-    if [ -n "\$DB_PASS" ] && [ -n "\$DB_NAME" ]; then
+    if [ -n "$DB_PASS" ] && [ -n "$DB_NAME" ]; then
         echo "Backing up MySQL database..."
-        mysqldump -h 127.0.0.1 -P 3306 -u "\$DB_USER" -p"\$DB_PASS" "\$DB_NAME" > "\$BACKUP_DIR/marzneshin_backup.sql"
+        mysqldump -h 127.0.0.1 -P 3306 -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" > "$BACKUP_DIR/marzneshin_backup.sql"
         echo "MySQL backup completed."
     else
         echo "MySQL credentials not found in docker-compose.yml"
@@ -95,42 +101,62 @@ else
     echo "docker-compose.yml not found. Skipping MySQL backup."
 fi
 
-# Compression
-ARCHIVE="\$OUTPUT_BASE"
-if [ "\$COMP_TYPE" == "zip" ]; then
-    ARCHIVE="\$OUTPUT_BASE.zip"
-    zip -r "\$ARCHIVE" .
-elif [ "\$COMP_TYPE" == "tgz" ]; then
-    ARCHIVE="\$OUTPUT_BASE.tgz"
-    tar -czf "\$ARCHIVE" .
-elif [ "\$COMP_TYPE" == "7z" ]; then
-    ARCHIVE="\$OUTPUT_BASE.7z"
-    7z a "\$ARCHIVE" .
+# ==============================
+# Compression Section (Fixed)
+# ==============================
+ARCHIVE="$OUTPUT_BASE"
+
+if [ "$COMP_TYPE" == "zip" ]; then
+    ARCHIVE="$OUTPUT_BASE.zip"
+    zip -r "$ARCHIVE" .
+
+elif [ "$COMP_TYPE" == "tgz" ]; then
+    ARCHIVE="$OUTPUT_BASE.tgz"
+    tar -czf "$ARCHIVE" .
+
+elif [ "$COMP_TYPE" == "7z" ]; then
+    ARCHIVE="$OUTPUT_BASE.7z"
+    7z a -t7z -m0=lzma2 -mx=9 -mfb=256 -md=1536m -ms=on "$ARCHIVE" .
+
+elif [ "$COMP_TYPE" == "xz" ]; then
+    ARCHIVE="$OUTPUT_BASE.tar.xz"
+    tar -cf - . | xz -9 -T0 -c > "$ARCHIVE"
+
+elif [ "$COMP_TYPE" == "zstd" ]; then
+    ARCHIVE="$OUTPUT_BASE.tar.zst"
+    tar -cf - . | zstd -19 -T0 -o "$ARCHIVE"
+
 else
-    ARCHIVE="\$OUTPUT_BASE.zip"
-    zip -r "\$ARCHIVE" .
+    ARCHIVE="$OUTPUT_BASE.zip"
+    zip -r "$ARCHIVE" .
 fi
 
-# File size check
-if [ -f "\$ARCHIVE" ]; then
-    FILE_SIZE_MB=\$(du -m "\$ARCHIVE" | cut -f1)
-    echo "Total size file: \$FILE_SIZE_MB MB"
+# ==============================
+# File size check and Telegram send
+# ==============================
+if [ -f "$ARCHIVE" ]; then
+    FILE_SIZE_MB=$(du -m "$ARCHIVE" | cut -f1)
+    echo "Total size file: $FILE_SIZE_MB MB"
 else
     echo "Backup file not created!"
     exit 1
 fi
 
-# Send via Telegram
-if [ -n "\$BOT_TOKEN" ] && [ -n "\$CHAT_ID" ]; then
-    curl -s -F chat_id="\$CHAT_ID" -F caption="\$CAPTION" -F document=@"\$ARCHIVE" https://api.telegram.org/bot\$BOT_TOKEN/sendDocument
+if [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ]; then
+    curl -s -F chat_id="$CHAT_ID" -F caption="$CAPTION" -F document=@"$ARCHIVE" https://api.telegram.org/bot$BOT_TOKEN/sendDocument
     echo "Backup successfully sent to Telegram!"
 else
     echo "Telegram token or chat ID not set. Skipping send."
 fi
 
-# Cleanup
-rm -rf "\$BACKUP_DIR"/*
+rm -rf "$BACKUP_DIR"/*
 EOF
+
+    # Replace dynamic variables in backup script
+    sed -i "s|__BOT_TOKEN__|$BOT_TOKEN|g" $BACKUP_SCRIPT
+    sed -i "s|__CHAT_ID__|$CHAT_ID|g" $BACKUP_SCRIPT
+    sed -i "s|__CAPTION__|$CAPTION|g" $BACKUP_SCRIPT
+    sed -i "s|__COMP_TYPE__|$COMP_TYPE|g" $BACKUP_SCRIPT
 
     chmod +x $BACKUP_SCRIPT
 
