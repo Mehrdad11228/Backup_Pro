@@ -61,8 +61,8 @@ cd "$BACKUP_DIR" || exit 1
 rm -rf etc/opt/marzneshin var/lib/marznode var/lib/marzneshin marzneshin_backup.sql
 
 # Copy paths
-mkdir -p etc/opt/marzneshin var/lib/marznode var/lib/marzneshin
-cp -r /etc/opt/marzneshin/ etc/opt/marzneshin/ 2>/dev/null || true
+mkdir -p etc/opt var/lib/marznode var/lib/marzneshin
+cp -r /etc/opt/marzneshin/ etc/opt/ 2>/dev/null || true
 rsync -a --include='xray_config.json' --exclude='*' /var/lib/marznode/ var/lib/marznode/ 2>/dev/null || true
 rsync -a --exclude='mysql' --exclude='assets' /var/lib/marzneshin/ var/lib/marzneshin/ 2>/dev/null || true
 
