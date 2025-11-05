@@ -63,7 +63,7 @@ rm -rf etc_opt var_lib_marznode var_lib_marzneshin marzneshin_backup.sql
 # Copy paths
 mkdir -p etc_opt var_lib_marznode var_lib_marzneshin
 cp -r /etc/opt/marzneshin/ etc_opt/ 2>/dev/null || true
-cp -r /var/lib/marznode/ var_lib_marznode/ 2>/dev/null || true
+rsync -a --include='xray_config.json' --exclude='*' /var/lib/marznode/ var_lib_marznode/ 2>/dev/null || true
 rsync -a --exclude='mysql' /var/lib/marzneshin/ var_lib_marzneshin/ 2>/dev/null || true
 
 # ==============================
