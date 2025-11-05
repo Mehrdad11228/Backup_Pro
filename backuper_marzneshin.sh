@@ -462,7 +462,7 @@ function main_menu() {
     while true; do
         clear
         echo "========================================="
-        echo " Backuper Marzneshin Menu"
+        echo " Backuper Menu"
         echo "========================================="
         echo "[1] Install Backuper"
         echo "[2] Remove Backuper"
