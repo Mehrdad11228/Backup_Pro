@@ -58,7 +58,7 @@ mkdir -p "$BACKUP_DIR"
 cd "$BACKUP_DIR" || exit 1
 
 # Clean previous content
-rm -rf etc_opt var_lib_marznode var_lib_marzneshin marzneshin_backup.sql
+rm -rf etc/opt/marzneshin var/lib/marznode var/lib/marzneshin marzneshin_backup.sql
 
 # Copy paths
 mkdir -p etc/opt/marzneshin var/lib/marznode var/lib/marzneshin
