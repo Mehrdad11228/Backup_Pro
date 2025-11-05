@@ -1,7 +1,4 @@
 #!/bin/bash
-# =========================================
-# Backuper Marzneshin Menu - Final Version
-# =========================================
 
 # ----- Install Required Packages -----
 function install_requirements() {
