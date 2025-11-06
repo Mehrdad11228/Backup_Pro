@@ -54,9 +54,6 @@ ARCHIVE=""
 mkdir -p "$BACKUP_DIR"
 cd "$BACKUP_DIR" || exit 1
 
-# Clean previous content Marzneshin
-rm -rf etc/opt/marzneshin var/lib/marznode var/lib/marzneshin marzneshin_backup.sql
-
 # Copy paths Marzneshin
 mkdir -p etc/opt var/lib/marznode var/lib/marzneshin
 cp -r /etc/opt/marzneshin/ etc/opt/ 2>/dev/null || true
