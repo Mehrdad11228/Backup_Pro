@@ -513,6 +513,8 @@ function transfer_backup() {
         REMOTE_NODE="/var/lib/marznode"
         REMOTE_MARZ="/var/lib/marzneshin"
         REMOTE_DB="/root/Marzneshin-Mysql"
+        DB_ENABLED=0
+        DB_DIR_NAME="Marzneshin-Mysql"
 
         MISSING_DIRS=()
         [[ ! -d "/etc/opt/marzneshin" ]] && MISSING_DIRS+=("/etc/opt/marzneshin")
@@ -537,9 +539,11 @@ function transfer_backup() {
             sqlite)
                 echo "Database: SQLite (files included in /var/lib/marzneshin)"
                 DB_BACKUP_SCRIPT=""
+                DB_ENABLED=0
                 ;;
             mysql)
                 echo "Database: MySQL"
+                DB_ENABLED=1
                 DB_BACKUP_SCRIPT=$(cat <<'EOF'
 DOCKER_COMPOSE="/etc/opt/marzneshin/docker-compose.yml"
 DB_PASS=$(grep 'MYSQL_ROOT_PASSWORD:' "$DOCKER_COMPOSE" | awk -F': ' '{print $2}' | tr -d ' "')
@@ -557,6 +561,7 @@ EOF
                 ;;
             mariadb)
                 echo "Database: MariaDB"
+                DB_ENABLED=1
                 DB_BACKUP_SCRIPT=$(cat <<'EOF'
 DOCKER_COMPOSE="/etc/opt/marzneshin/docker-compose.yml"
 DB_PASS=$(grep 'MARIADB_ROOT_PASSWORD:' "$DOCKER_COMPOSE" | awk -F': ' '{print $2}' | tr -d ' "')
@@ -588,6 +593,8 @@ REMOTE_ETC="$REMOTE_ETC"
 REMOTE_NODE="$REMOTE_NODE"
 REMOTE_MARZ="$REMOTE_MARZ"
 REMOTE_DB="$REMOTE_DB"
+DB_ENABLED="$DB_ENABLED"
+DB_DIR_NAME="$DB_DIR_NAME"
 DATE=\$(date +"%Y-%m-%d_%H-%M-%S")
 OUTPUT_DIR="\$BACKUP_DIR/backup_\$DATE"
 
@@ -607,15 +614,21 @@ command -v sshpass &>/dev/null || apt update && apt install -y sshpass
 echo "Cleaning remote server..."
 sshpass -p "\$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "\$REMOTE_USER@\${REMOTE_IP}" "
     echo 'Removing old data...'
-    rm -rf '\$REMOTE_ETC' '\$REMOTE_NODE' '\$REMOTE_MARZ' '\$REMOTE_DB'
-    mkdir -p '\$REMOTE_ETC' '\$REMOTE_NODE' '\$REMOTE_MARZ' '\$REMOTE_DB'
+    rm -rf '\$REMOTE_ETC' '\$REMOTE_NODE' '\$REMOTE_MARZ'
+    mkdir -p '\$REMOTE_ETC' '\$REMOTE_NODE' '\$REMOTE_MARZ'
+    if [ \"\$DB_ENABLED\" = \"1\" ]; then
+        rm -rf '\$REMOTE_DB'
+        mkdir -p '\$REMOTE_DB'
+    fi
 " || { echo "Failed to connect to remote server!"; exit 1; }
 
 echo "Transferring data to \$REMOTE_IP..."
 sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/etc_opt/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_ETC/" && echo "etc_opt transferred"
 sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/var_lib_marznode/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_NODE/" && echo "var_lib_marznode transferred"
 sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/var_lib_marzneshin/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_MARZ/" && echo "var_lib_marzneshin transferred"
-[[ -d "\$OUTPUT_DIR/Marzneshin-Mysql" ]] && sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/Marzneshin-Mysql/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_DB/" && echo "Database transferred"
+if [ "\$DB_ENABLED" = "1" ] && [ -d "\$OUTPUT_DIR/\$DB_DIR_NAME" ]; then
+    sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/\$DB_DIR_NAME/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_DB/" && echo "Database transferred"
+fi
 
 echo "Restarting Marzneshin on remote..."
 sshpass -p "\$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "\$REMOTE_USER@\${REMOTE_IP}" "marzneshin restart" && echo "Restart successful" || echo "Restart failed"
@@ -637,6 +650,8 @@ EOF
         REMOTE_LIB_PAS="/var/lib/pasarguard"
         REMOTE_LIB_PG="/var/lib/pg-node"
         REMOTE_DB="/root/Pasarguard-DB"
+        DB_ENABLED=0
+        DB_DIR_NAME="Pasarguard-DB"
 
         MISSING_DIRS=()
         [[ ! -d "/opt/pasarguard" ]] && MISSING_DIRS+=("/opt/pasarguard")
@@ -662,9 +677,11 @@ EOF
             sqlite)
                 echo "Database: SQLite (files included in copied folders)"
                 DB_BACKUP_SCRIPT=""
+                DB_ENABLED=0
                 ;;
             mysql|mariadb)
                 echo "Database: MariaDB/MySQL"
+                DB_ENABLED=1
                 DB_BACKUP_SCRIPT=$(cat <<'EOF'
 ENV_FILE="/opt/pasarguard/.env"
 parse_db_url() {
@@ -704,6 +721,7 @@ EOF
                 ;;
             postgresql)
                 echo "Database: PostgreSQL"
+                DB_ENABLED=1
                 DB_BACKUP_SCRIPT=$(cat <<'EOF'
 ENV_FILE="/opt/pasarguard/.env"
 parse_db_url() {
@@ -742,6 +760,7 @@ EOF
             *)
                 echo "Database: unknown/unsupported. Skipping DB dump."
                 DB_BACKUP_SCRIPT=""
+                DB_ENABLED=0
                 ;;
         esac
 
@@ -760,6 +779,8 @@ REMOTE_PG_NODE="$REMOTE_PG_NODE"
 REMOTE_LIB_PAS="$REMOTE_LIB_PAS"
 REMOTE_LIB_PG="$REMOTE_LIB_PG"
 REMOTE_DB="$REMOTE_DB"
+DB_ENABLED="$DB_ENABLED"
+DB_DIR_NAME="$DB_DIR_NAME"
 DATE=\$(date +"%Y-%m-%d_%H-%M-%S")
 OUTPUT_DIR="\$BACKUP_DIR/backup_\$DATE"
 
@@ -779,8 +800,12 @@ command -v sshpass &>/dev/null || apt update && apt install -y sshpass
 echo "Cleaning remote server..."
 sshpass -p "\$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "\$REMOTE_USER@\${REMOTE_IP}" "
     echo 'Removing old data...'
-    rm -rf '\$REMOTE_PAS' '\$REMOTE_PG_NODE' '\$REMOTE_LIB_PAS' '\$REMOTE_LIB_PG' '\$REMOTE_DB'
-    mkdir -p '\$REMOTE_PAS' '\$REMOTE_PG_NODE' '\$REMOTE_LIB_PAS' '\$REMOTE_LIB_PG' '\$REMOTE_DB'
+    rm -rf '\$REMOTE_PAS' '\$REMOTE_PG_NODE' '\$REMOTE_LIB_PAS' '\$REMOTE_LIB_PG'
+    mkdir -p '\$REMOTE_PAS' '\$REMOTE_PG_NODE' '\$REMOTE_LIB_PAS' '\$REMOTE_LIB_PG'
+    if [ \"\$DB_ENABLED\" = \"1\" ]; then
+        rm -rf '\$REMOTE_DB'
+        mkdir -p '\$REMOTE_DB'
+    fi
 " || { echo "Failed to connect to remote server!"; exit 1; }
 
 echo "Transferring data to \$REMOTE_IP..."
@@ -788,7 +813,9 @@ sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/opt_pasarguard/" "\$REMOTE_USE
 sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/opt_pg_node/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_PG_NODE/" && echo "opt_pg_node transferred"
 sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/var_lib_pasarguard/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_LIB_PAS/" && echo "var_lib_pasarguard transferred"
 sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/var_lib_pg_node/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_LIB_PG/" && echo "var_lib_pg_node transferred"
-[[ -d "\$OUTPUT_DIR/Pasarguard-DB" ]] && sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/Pasarguard-DB/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_DB/" && echo "Database transferred"
+if [ "\$DB_ENABLED" = "1" ] && [ -d "\$OUTPUT_DIR/\$DB_DIR_NAME" ]; then
+    sshpass -p "\$REMOTE_PASS" rsync -a "\$OUTPUT_DIR/\$DB_DIR_NAME/" "\$REMOTE_USER@\${REMOTE_IP}:\$REMOTE_DB/" && echo "Database transferred"
+fi
 
 echo "Cleaning local backup..."
 rm -rf "\$BACKUP_DIR"/*
