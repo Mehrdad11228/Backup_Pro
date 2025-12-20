@@ -1513,7 +1513,7 @@ echo "       Date: \$(date '+%Y-%m-%d %H:%M:%S')"
 echo "========================================"
 EOF
 
-           ##Pasarguard##
+##Pasarguard##
 elif [[ "$PANEL_TYPE" == "Pasarguard" ]]; then
   PANEL_NAME="Pasarguard"
   BACKUP_DIR="/root/backuper_pasarguard"
@@ -1525,7 +1525,6 @@ elif [[ "$PANEL_TYPE" == "Pasarguard" ]]; then
   REMOTE_LIB_MYSQL="/var/lib/mysql/pasarguard"
   REMOTE_LIB_PGSQL="/var/lib/postgresql"
   REMOTE_DB="/root/Pasarguard-DB"
-  
 
   DB_ENABLED=0
   DB_DIR_NAME="Pasarguard-DB"
@@ -1654,6 +1653,8 @@ EOF
 
   cat > "$TRANSFER_SCRIPT" <<EOF
 #!/bin/bash
+set -e
+
 echo "Starting transfer backup ($PANEL_NAME)..."
 echo "Date: \$(date '+%Y-%m-%d %H:%M:%S')"
 echo "----------------------------------------"
@@ -1683,7 +1684,7 @@ BACKUP_CLIENT_DB=\$(echo "\${BACKUP_CLIENT_DB:-N}" | tr -d '[:space:]\\r' | tr '
 [ "\$BACKUP_CLIENT_DB" = "NO" ] && BACKUP_CLIENT_DB="N"
 [ "\$BACKUP_CLIENT_DB" = "Y" ] || BACKUP_CLIENT_DB="N"
 # ---------------------------------------------------------------
-             
+
 DO_DB_DUMP_TRANSFER="0"
 if [ "\$DB_ENABLED" = "1" ] && [ "\$BACKUP_CLIENT_DB" = "Y" ]; then
   DO_DB_DUMP_TRANSFER="1"
@@ -1699,7 +1700,6 @@ case "\$DB_TYPE" in
   postgresql) DO_PGSQL_DIR_TRANSFER="1" ;;
 esac
 
-
 DATE=\$(date +"%Y-%m-%d_%H-%M-%S")
 OUTPUT_DIR="\$BACKUP_DIR/backup_\$DATE"
 mkdir -p "\$OUTPUT_DIR"
@@ -1710,10 +1710,18 @@ rsync -a /opt/pg-node/        "\$OUTPUT_DIR/opt_pg_node/"
 rsync -a /var/lib/pasarguard/ "\$OUTPUT_DIR/var_lib_pasarguard/"
 rsync -a /var/lib/pg-node/    "\$OUTPUT_DIR/var_lib_pg_node/"
 
+# PostgreSQL local copy (ONLY if DB is PostgreSQL)
 if [ "\$DO_PGSQL_DIR_TRANSFER" = "1" ] && [ -d "/var/lib/postgresql" ]; then
   rsync -a /var/lib/postgresql/ "\$OUTPUT_DIR/var_lib_postgresql/"
 else
   echo "PostgreSQL data dir copy on Source: Skipped (DB is not PostgreSQL or dir missing)"
+fi
+
+# MySQL local copy (ONLY if DB is MySQL/MariaDB)
+if [ "\$DO_MYSQL_DIR_TRANSFER" = "1" ] && [ -d "/var/lib/mysql/pasarguard" ]; then
+  rsync -a /var/lib/mysql/pasarguard/ "\$OUTPUT_DIR/var_lib_mysql_pasarguard/"
+else
+  echo "MySQL data dir copy on Source: Skipped (DB is not MySQL/MariaDB or dir missing)"
 fi
 
 if [ "\$DO_DB_DUMP_TRANSFER" = "1" ]; then
@@ -1729,7 +1737,6 @@ fi
 
 echo "Installing sshpass if needed..."
 command -v sshpass &>/dev/null || { apt update && apt install -y sshpass; }
-
 
 echo "Cleaning remote server (delete then replace)..."
 SSH_ERR_FILE=$(mktemp)
@@ -1747,12 +1754,15 @@ fi
 
 if [ "$DO_MYSQL_DIR_TRANSFER" = "1" ]; then
   REMOTE_CMD="$REMOTE_CMD
+# best-effort stop to avoid live datadir issues
+systemctl stop mariadb 2>/dev/null || systemctl stop mysql 2>/dev/null || true;
 rm -rf '$REMOTE_LIB_MYSQL';
 mkdir -p '$REMOTE_LIB_MYSQL';"
 fi
 
 if [ "$DO_PGSQL_DIR_TRANSFER" = "1" ]; then
   REMOTE_CMD="$REMOTE_CMD
+systemctl stop postgresql 2>/dev/null || true;
 rm -rf '$REMOTE_LIB_PGSQL';
 mkdir -p '$REMOTE_LIB_PGSQL';"
 fi
@@ -1797,28 +1807,50 @@ rm -f "$SSH_ERR_FILE"
 echo "Remote cleanup done."
 
 echo "Transferring data to $REMOTE_IP..."
-sshpass -p "$REMOTE_PASS" rsync -a "$OUTPUT_DIR/opt_pasarguard/"     "$REMOTE_USER@${REMOTE_IP}:$REMOTE_PAS/"      && echo "opt_pasarguard transferred"
-sshpass -p "$REMOTE_PASS" rsync -a "$OUTPUT_DIR/opt_pg_node/"        "$REMOTE_USER@${REMOTE_IP}:$REMOTE_PG_NODE/"  && echo "opt_pg_node transferred"
-sshpass -p "$REMOTE_PASS" rsync -a "$OUTPUT_DIR/var_lib_pasarguard/" "$REMOTE_USER@${REMOTE_IP}:$REMOTE_LIB_PAS/"  && echo "var_lib_pasarguard transferred"
-sshpass -p "$REMOTE_PASS" rsync -a "$OUTPUT_DIR/var_lib_pg_node/"    "$REMOTE_USER@${REMOTE_IP}:$REMOTE_LIB_PG/"   && echo "var_lib_pg_node transferred"
+SSH_RSYNC='ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10'
 
-if [ "\$DO_MYSQL_DIR_TRANSFER" = "1" ] && [ -d "/var/lib/mysql/pasarguard" ]; then
-  rsync -a /var/lib/mysql/pasarguard/ "\$OUTPUT_DIR/var_lib_mysql_pasarguard/"
+sshpass -p "$REMOTE_PASS" rsync -a -e "$SSH_RSYNC" "$OUTPUT_DIR/opt_pasarguard/"     "$REMOTE_USER@${REMOTE_IP}:$REMOTE_PAS/"      && echo "opt_pasarguard transferred"
+sshpass -p "$REMOTE_PASS" rsync -a -e "$SSH_RSYNC" "$OUTPUT_DIR/opt_pg_node/"        "$REMOTE_USER@${REMOTE_IP}:$REMOTE_PG_NODE/"  && echo "opt_pg_node transferred"
+sshpass -p "$REMOTE_PASS" rsync -a -e "$SSH_RSYNC" "$OUTPUT_DIR/var_lib_pasarguard/" "$REMOTE_USER@${REMOTE_IP}:$REMOTE_LIB_PAS/"  && echo "var_lib_pasarguard transferred"
+sshpass -p "$REMOTE_PASS" rsync -a -e "$SSH_RSYNC" "$OUTPUT_DIR/var_lib_pg_node/"    "$REMOTE_USER@${REMOTE_IP}:$REMOTE_LIB_PG/"   && echo "var_lib_pg_node transferred"
+
+# MySQL remote transfer (replace)
+if [ "$DO_MYSQL_DIR_TRANSFER" = "1" ] && [ -d "$OUTPUT_DIR/var_lib_mysql_pasarguard" ]; then
+  echo "Transferring MySQL data dir to remote..."
+  sshpass -p "$REMOTE_PASS" rsync -a --delete -e "$SSH_RSYNC" \
+    "$OUTPUT_DIR/var_lib_mysql_pasarguard/" \
+    "$REMOTE_USER@${REMOTE_IP}:$REMOTE_LIB_MYSQL/" \
+    && echo "var_lib_mysql_pasarguard transferred"
 else
-  echo "MySQL data dir copy on Source: Skipped (DB is not MySQL/MariaDB or dir missing)"
+  echo "MySQL data dir transfer: Skipped"
 fi
 
+# PostgreSQL remote transfer
 if [ "$DO_PGSQL_DIR_TRANSFER" = "1" ] && [ -d "$OUTPUT_DIR/var_lib_postgresql" ]; then
-  sshpass -p "$REMOTE_PASS" rsync -a "$OUTPUT_DIR/var_lib_postgresql/" \
+  sshpass -p "$REMOTE_PASS" rsync -a --delete -e "$SSH_RSYNC" \
+    "$OUTPUT_DIR/var_lib_postgresql/" \
     "$REMOTE_USER@${REMOTE_IP}:$REMOTE_LIB_PGSQL/" && echo "var_lib_postgresql transferred"
 else
   echo "PostgreSQL data dir transfer: Skipped"
 fi
 
+# DB dump folder transfer
 if [ "$DO_DB_DUMP_TRANSFER" = "1" ] && [ -d "$OUTPUT_DIR/$DB_DIR_NAME" ]; then
-  sshpass -p "$REMOTE_PASS" rsync -a "$OUTPUT_DIR/$DB_DIR_NAME/" "$REMOTE_USER@${REMOTE_IP}:$REMOTE_DB/" && echo "Database dump transferred"
+  sshpass -p "$REMOTE_PASS" rsync -a --delete -e "$SSH_RSYNC" \
+    "$OUTPUT_DIR/$DB_DIR_NAME/" \
+    "$REMOTE_USER@${REMOTE_IP}:$REMOTE_DB/" && echo "Database dump transferred"
 else
   echo "Database dump transfer: Skipped"
+fi
+
+# best-effort start services back
+if [ "$DO_MYSQL_DIR_TRANSFER" = "1" ]; then
+  sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@${REMOTE_IP}" \
+    "systemctl start mariadb 2>/dev/null || systemctl start mysql 2>/dev/null || true" || true
+fi
+if [ "$DO_PGSQL_DIR_TRANSFER" = "1" ]; then
+  sshpass -p "$REMOTE_PASS" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@${REMOTE_IP}" \
+    "systemctl start postgresql 2>/dev/null || true" || true
 fi
 
 echo "Restarting Pasarguard on remote (detached)..."
@@ -1846,9 +1878,8 @@ echo " • /var/lib/pg-node                  → $REMOTE_LIB_PG"
 if [ "$DO_MYSQL_DIR_TRANSFER" = "1" ]; then
   echo " • /var/lib/mysql/pasarguard         → $REMOTE_LIB_MYSQL"
 fi
-
 if [ "$DO_PGSQL_DIR_TRANSFER" = "1" ]; then
-  echo " • /var/lib/postgresql              → $REMOTE_LIB_PGSQL"
+  echo " • /var/lib/postgresql               → $REMOTE_LIB_PGSQL"
 fi
 if [ "$DO_DB_DUMP_TRANSFER" = "1" ]; then
   echo " • DB dump folder                    → $REMOTE_DB"
