@@ -1,140 +1,127 @@
+# Backup_Pro (Backup & Transfer)
 
+A simple interactive **backup + transfer** tool for popular panels, with **Telegram reporting** and **cron scheduling**.
 
-Interactive terminal UI (colors, menus)
+## Quick Install / Run
 
-Automatic dependency installation (compression tools, DB clients, sshpass, etc.)
-
-Panel-aware backup paths (per supported panel)
-
-Database type detection (SQLite / MySQL / MariaDB / PostgreSQL)
-
-Optional database dump:
-
-mysqldump for MySQL/MariaDB
-
-pg_dump (often via Docker exec) for PostgreSQL
-
-Compression formats:
-
-zip / tgz / 7z / tar / gzip / gz
-
-Send backups to Telegram (Bot API)
-
-Schedule backups via crontab
-
-Clean uninstall (remove scripts + cron jobs + folders)
-
-Transfer backups between servers using sshpass + rsync and trigger remote restart
-
-📦 Installation & Run
+```bash
 sudo bash -c "$(curl -sL https://github.com/Mehrdad11228/Backup_Pro/raw/main/Backup-Transfor.sh)"
-
-
-Requires root privileges. On start, it runs apt update/upgrade and installs required packages.
-
-🗂️ What gets backed up?
+Supported Panels
 Marzneshin
 
+Pasarguard
+
+Marzban
+
+X-ui (config + cert only)
+
+What This Script Does
+Installs required packages (zip/tar/7z, db clients, sshpass, rsync, etc.)
+
+Shows a menu:
+
+Install Backuper
+
+Remove Backuper
+
+Run Backup Now
+
+Transfer Backup
+
+Creates a panel-specific backup script in /root/
+
+Schedules automatic backups using crontab
+
+Sends backup archive + report to Telegram
+
+Backup (Flow)
+text
+Copy code
+Backup
+├─ Detect Panel & DB Type
+├─ Copy Required Paths
+├─ (Optional) Database Dump
+├─ Compress (zip/tgz/7z/tar/gzip)
+└─ Send to Telegram + Cleanup
+Transfer (Flow)
+text
+Copy code
+Transfer
+├─ Select Panel
+├─ (Optional) DB Dump on Source
+├─ Copy Data to Temp Folder
+├─ Remote Cleanup (delete old paths)
+├─ Rsync to Remote (sshpass)
+└─ Restart Panel on Remote (nohup) + Report
+Backup Content (Per Panel)
+Marzneshin
 Paths:
 
 /etc/opt/marzneshin/
 
 /var/lib/marzneshin/
 
-/var/lib/marznode/ (only xray_config.json)
+/var/lib/marznode/ (only needed files)
 
 DB:
 
-Detected from docker-compose.yml
+SQLite: included in files
 
-SQLite: included in copied files
-
-MySQL/MariaDB: dumped via mysqldump
+MySQL/MariaDB: tries to dump using credentials from docker-compose.yml
 
 Marzban
-
 Paths:
 
 /opt/marzban/
 
-/var/lib/marzban/ (excluding some subdirs in copy stage)
+/var/lib/marzban/
 
 DB:
-
-Detected from /opt/marzban/.env (SQLALCHEMY_DATABASE_URL)
 
 SQLite: included in files
 
-MySQL/MariaDB: dumped via mysqldump (password from MYSQL_PASSWORD)
+MySQL/MariaDB: dumps using .env (MYSQL_PASSWORD)
 
 Pasarguard
-
 Paths:
 
-/opt/pasarguard/, /opt/pg-node/
+/opt/pasarguard/
 
-/var/lib/pasarguard/, /var/lib/pg-node/
+/opt/pg-node/
+
+/var/lib/pasarguard/
+
+/var/lib/pg-node/
 
 DB:
 
-Detected from /opt/pasarguard/.env
+SQLite: included in files
 
-SQLite: no dump
+MySQL/MariaDB: dumps from SQLALCHEMY_DATABASE_URL
 
-PostgreSQL: pg_dump (commonly inside docker postgres container)
-
-MySQL/MariaDB: mysqldump
+PostgreSQL: dumps via docker exec pg_dump (auto-detect postgres container)
 
 X-ui
-
 Paths:
 
 /etc/x-ui/
 
 /root/cert/
 
-🔁 Transfer Backup (Server A ➜ Server B)
+Notes
+Run as root (sudo).
 
-Performs local pre-check to ensure required paths exist on source
+Telegram may reject large files; script warns when archive size is > 50MB.
 
-Cleans target paths (deletes old data) and transfers with rsync
+Transfer mode removes old paths on remote server before copying (replace strategy).
 
-Triggers restart on destination:
+Generated Files
+Backup scripts:
 
-marzneshin restart / marzban restart / pasarguard restart / x-ui restart
+/root/marzneshin_backup.sh
 
-⚠️ Warning: Transfer can delete existing data on the destination server. Backup destination first.
+/root/marzban_backup.sh
 
-🌳 Script Structure (Tree)
-Backup-Transfor.sh
-├─ UI helpers + menu rendering
-├─ install_requirements (apt + packages)
-├─ DB detection (Marzneshin/Marzban/Pasarguard)
-├─ Backup script generators (creates /root/*_backup.sh)
-├─ Menu actions:
-│  ├─ Install Backuper (cron + first backup + telegram)
-│  ├─ Remove Backuper
-│  ├─ Run Script Now
-│  └─ Transfer Backup
-└─ main_menu
+/root/pasarguard_backup.sh
 
-🧭 Flowchart (Mermaid)
-flowchart TD
-    A([Start]) --> B[Install Requirements]
-    B --> C{Menu}
-    C -->|Install| D[Collect Telegram + Compression + Caption]
-    D --> E[Set Cron]
-    E --> F[Detect DB]
-    F --> G[Generate Backup Script]
-    G --> H[Run First Backup + Telegram]
-    C -->|Remove| I[Remove scripts + cron + cleanup]
-    C -->|Run Now| J[Execute existing backup script]
-    C -->|Transfer| K[Remote credentials + pre-check + rsync + restart]
-    C -->|Exit| L([Exit])
-
-🔐 Security Notes
-
-sshpass uses passwords non-interactively; consider SSH keys if you plan to improve security.
-
-Telegram token/chat_id are written into the generated backup scripts under /root/.
-Restrict permissions: chmod 700 /root/*_backup.sh
+/root/x-ui_backup.sh
