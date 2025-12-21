@@ -528,14 +528,32 @@ ENV_FILE="/opt/pasarguard/.env"
 parse_db_url() {
     local url="$1"
     url="${url#*://}"
+
     local creds="${url%%@*}"
     local hostdb="${url#*@}"
-    local user="${creds%%:*}"
-    local pass="${creds#*:}"; pass="${pass%%@*}"
+
+    local user pass
+    if [[ "$creds" == *:* ]]; then
+      user="${creds%%:*}"
+      pass="${creds#*:}"
+    else
+      user="$creds"
+      pass=""
+    fi
+
     local hostport="${hostdb%%/*}"
     local dbname="${hostdb#*/}"
-    local host="${hostport%%:*}"
-    local port="${hostport##*:}"
+    dbname="${dbname%%\?*}"   # اگر ?sslmode=... داشت حذفش کن
+
+    local host port
+    if [[ "$hostport" == *:* ]]; then
+      host="${hostport%%:*}"
+      port="${hostport##*:}"
+    else
+      host="$hostport"
+      port=""
+    fi
+
     echo "$user" "$pass" "$host" "$port" "$dbname"
 }
 
@@ -550,11 +568,33 @@ if [ -f "$ENV_FILE" ]; then
             read DB_USER DB_PASS DB_HOST DB_PORT DB_NAME < <(parse_db_url "$DB_URL")
             : "${DB_USER:=pasarguard}"
             : "${DB_NAME:=pasarguard}"
-            if [[ "$DB_PROTO" == postgresql* ]]; then
+
+
+if [[ "$DB_PROTO" == postgresql* || "$DB_PROTO" == postgres* ]]; then
                 : "${DB_PORT:=5432}"
                 echo "Backing up PostgreSQL database..."
-                PGPASSWORD="$DB_PASS" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -F c "$DB_NAME" > "$BACKUP_DIR/pasarguard_backup.dump" 2>/dev/null && DB_BACKUP_DONE=1
-                [ $DB_BACKUP_DONE -eq 1 ] && echo "PostgreSQL backup completed." || echo "PostgreSQL backup failed."
+echo "Backing up PostgreSQL database (docker exec)..."
+DUMP_FILE="$BACKUP_DIR/pasarguard_backup.sql"
+
+CID=$(docker ps -q -f name=postgresql | head -n1)
+[ -z "$CID" ] && CID=$(docker ps -q -f name=postgres | head -n1)
+[ -z "$CID" ] && CID=$(docker ps -q -f ancestor=postgres | head -n1)
+
+if [ -z "$CID" ]; then
+  echo "Postgres container not found"
+else
+
+docker exec -e PGPASSWORD="$DB_PASS" "$CID" pg_dump -U "$DB_USER" "$DB_NAME" > "$DUMP_FILE" 2>/dev/null \
+  && [ -s "$DUMP_FILE" ] && DB_BACKUP_DONE=1
+
+  if [ $DB_BACKUP_DONE -eq 1 ]; then
+    echo "PostgreSQL backup completed."
+    
+  else
+echo "PostgreSQL backup failed."
+    rm -f "$DUMP_FILE"
+  fi
+fi
             elif [[ "$DB_PROTO" == mysql* || "$DB_PROTO" == mariadb* ]]; then
                 : "${DB_PORT:=3306}"
                 echo "Backing up MariaDB/MySQL database..."
@@ -1629,17 +1669,27 @@ if [ -f "$ENV_FILE" ]; then
     : "${DB_NAME:=pasarguard}"
     : "${DB_PORT:=5432}"
 
-    echo "Backing up PostgreSQL database..."
-    mkdir -p "$OUTPUT_DIR/Pasarguard-DB"
-    PGPASSWORD="$DB_PASS" pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -F c "$DB_NAME" \
-      > "$OUTPUT_DIR/Pasarguard-DB/pasarguard_backup.dump" 2>/dev/null \
-      && echo "PostgreSQL backup created." || echo "PostgreSQL backup failed."
+echo "Backing up PostgreSQL database (docker exec)..."
+mkdir -p "$OUTPUT_DIR/Pasarguard-DB"
+DUMP_FILE="$OUTPUT_DIR/Pasarguard-DB/pasarguard_backup.sql"
+
+CID=$(docker ps -q -f name=postgresql | head -n1)
+[ -z "$CID" ] && CID=$(docker ps -q -f name=postgres | head -n1)
+[ -z "$CID" ] && CID=$(docker ps -q -f ancestor=postgres | head -n1)
+
+if [ -z "$CID" ]; then
+  echo "Postgres container not found"
+else
+  docker exec -i -e PGPASSWORD="$DB_PASS" "$CID" pg_dump -U "$DB_USER" "$DB_NAME" > "$DUMP_FILE" \
+    && [ -s "$DUMP_FILE" ] && echo "PostgreSQL backup created." || (echo "PostgreSQL backup failed." ; rm -f "$DUMP_FILE")
+fi
   else
     echo "SQLALCHEMY_DATABASE_URL not found in .env"
   fi
 else
   echo ".env not found for Pasarguard"
 fi
+
 EOF
 )
       ;;
@@ -1835,7 +1885,7 @@ else
 fi
 
 # DB dump folder transfer
-if [ "$DO_DB_DUMP_TRANSFER" = "1" ] && [ -d "$OUTPUT_DIR/$DB_DIR_NAME" ]; then
+if [ "$DO_DB_DUMP_TRANSFER" = "1" ] && [ -s "$OUTPUT_DIR/$DB_DIR_NAME/pasarguard_backup.sql" ]; then
   sshpass -p "$REMOTE_PASS" rsync -a --delete -e "$SSH_RSYNC" \
     "$OUTPUT_DIR/$DB_DIR_NAME/" \
     "$REMOTE_USER@${REMOTE_IP}:$REMOTE_DB/" && echo "Database dump transferred"
