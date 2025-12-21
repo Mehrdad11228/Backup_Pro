@@ -1,78 +1,90 @@
-# Backup_Pro — Backup & Transfer Manager (Marzneshin / Marzban / Pasarguard / X-ui)
+```md
+# Backup_Pro (Backup & Transfer)
 
-`Backup_Pro` یک اسکریپت تعاملی (Interactive) برای **تهیه بک‌آپ زمان‌بندی‌شده** و همچنین **انتقال بک‌آپ بین سرورها** است.  
-این ابزار از چند پنل رایج (Marzneshin, Marzban, Pasarguard, X-ui) پشتیبانی می‌کند، نوع دیتابیس را تشخیص می‌دهد، بک‌آپ را فشرده‌سازی می‌کند و در صورت نیاز فایل را به **Telegram** ارسال می‌کند.
+یک ابزار ساده و منویی برای **بکاپ + انتقال (Transfer)** پنل‌ها، همراه با **گزارش تلگرام** و **زمان‌بندی کرون**.
 
----
-
-## 🚀 نصب و اجرا (Quick Start)
-
-برای اجرا روی سرور (Ubuntu/Debian) از دستور زیر استفاده کنید:
+## نصب / اجرا سریع
 
 ```bash
 sudo bash -c "$(curl -sL https://github.com/Mehrdad11228/Backup_Pro/raw/main/Backup-Transfor.sh)"
-✅ قابلیت‌ها
+پنل‌های پشتیبانی‌شده
+Marzneshin
 
-رابط کاربری ترمینالی با رنگ‌بندی و منوی ساده
+Pasarguard
 
-نصب خودکار پیش‌نیازها (ابزارهای فشرده‌سازی، کلاینت‌های DB، sshpass و…)
+Marzban
 
-بک‌آپ‌گیری از مسیرهای اصلی هر پنل
+X-ui (فقط کانفیگ و سرتیفیکیت)
 
-تشخیص نوع دیتابیس (SQLite / MySQL / MariaDB / PostgreSQL) بر اساس فایل تنظیمات
+این اسکریپت چه کاری انجام می‌دهد؟
+نصب پیش‌نیازها (zip/tar/7z، کلاینت دیتابیس‌ها، sshpass، rsync و…)
 
-تهیه Dump دیتابیس (در صورت نیاز) با mysqldump یا pg_dump
+نمایش منوی اصلی:
 
-فشرده‌سازی با فرمت‌های:
+نصب بکاپ‌گیر
 
-zip / tgz / 7z / tar / gzip / gz
+حذف بکاپ‌گیر
 
-ارسال خودکار بک‌آپ به تلگرام (Bot API)
+اجرای بکاپ دستی
 
-زمان‌بندی اجرای بک‌آپ با crontab
+انتقال بکاپ به سرور دیگر
 
-حذف کامل ابزار (پاک کردن اسکریپت‌ها و cron job ها)
+ساخت اسکریپت بکاپ اختصاصی هر پنل داخل /root/
 
-انتقال بک‌آپ به سرور دیگر با sshpass + rsync و اجرای Restart روی مقصد
+تنظیم زمان‌بندی بکاپ با crontab
 
-🧩 پنل‌های پشتیبانی‌شده و مسیرهای بک‌آپ
-1) Marzneshin
+ارسال فایل بکاپ + گزارش به Telegram
 
-مسیرهای بک‌آپ:
+Backup (Flow)
+text
+Copy code
+Backup
+├─ Detect Panel & DB Type
+├─ Copy Required Paths
+├─ (Optional) Database Dump
+├─ Compress (zip/tgz/7z/tar/gzip)
+└─ Send to Telegram + Cleanup
+Transfer (Flow)
+text
+Copy code
+Transfer
+├─ Select Panel
+├─ (Optional) DB Dump on Source
+├─ Copy Data to Temp Folder
+├─ Remote Cleanup (delete old paths)
+├─ Rsync to Remote (sshpass)
+└─ Restart Panel on Remote (nohup) + Report
+محتوای بکاپ (برای هر پنل)
+Marzneshin
+مسیرها:
 
 /etc/opt/marzneshin/
 
 /var/lib/marzneshin/
 
-/var/lib/marznode/ (فقط xray_config.json)
+/var/lib/marznode/ (فقط فایل‌های لازم)
 
 دیتابیس:
 
-تشخیص از docker-compose.yml
+SQLite: داخل فایل‌ها موجود است
 
-SQLite: فایل دیتابیس داخل مسیرهای کپی‌شده موجود است (dump جدا ندارد)
+MySQL/MariaDB: تلاش برای dump با اطلاعات docker-compose.yml
 
-MySQL/MariaDB: dump با mysqldump
-
-2) Marzban
-
-مسیرهای بک‌آپ:
+Marzban
+مسیرها:
 
 /opt/marzban/
 
-/var/lib/marzban/ (به‌جز فولدر mysql/ در حالت کپی)
+/var/lib/marzban/
 
 دیتابیس:
 
-تشخیص از /opt/marzban/.env و SQLALCHEMY_DATABASE_URL
+SQLite: داخل فایل‌ها موجود است
 
-SQLite: فایل DB همراه فایل‌هاست
+MySQL/MariaDB: dump از روی .env (متغیر MYSQL_PASSWORD)
 
-MySQL/MariaDB: dump با mysqldump و پسورد از MYSQL_PASSWORD
-
-3) Pasarguard
-
-مسیرهای بک‌آپ:
+Pasarguard
+مسیرها:
 
 /opt/pasarguard/
 
@@ -84,178 +96,33 @@ MySQL/MariaDB: dump با mysqldump و پسورد از MYSQL_PASSWORD
 
 دیتابیس:
 
-تشخیص از /opt/pasarguard/.env و SQLALCHEMY_DATABASE_URL
+SQLite: داخل فایل‌ها موجود است
 
-SQLite: dump ندارد
+MySQL/MariaDB: dump از SQLALCHEMY_DATABASE_URL
 
-PostgreSQL: dump با pg_dump (معمولاً داخل کانتینر postgres)
+PostgreSQL: dump با docker exec pg_dump (تشخیص خودکار کانتینر postgres)
 
-MySQL/MariaDB: dump با mysqldump
-
-4) X-ui
-
-مسیرهای بک‌آپ:
+X-ui
+مسیرها:
 
 /etc/x-ui/
 
 /root/cert/
 
-🗂️ فایل‌هایی که اسکریپت ایجاد می‌کند
+نکات مهم
+اسکریپت باید با root اجرا شود (sudo).
 
-پس از نصب (Install Backuper) برای هر پنل، یک اسکریپت بک‌آپ اختصاصی ایجاد می‌شود:
+تلگرام ممکن است فایل‌های حجیم را قبول نکند؛ اگر حجم بیشتر از 50MB باشد هشدار می‌دهد.
 
-Marzneshin: /root/marzneshin_backup.sh
+در حالت Transfer، مسیرهای مقصد روی سرور ریموت قبل از انتقال پاکسازی و جایگزین می‌شوند.
 
-Marzban: /root/marzban_backup.sh
+فایل‌های ساخته‌شده
+اسکریپت‌های بکاپ:
 
-Pasarguard: /root/pasarguard_backup.sh
+/root/marzneshin_backup.sh
 
-X-ui: /root/x-ui_backup.sh
+/root/marzban_backup.sh
 
-همچنین یک فولدر موقت بک‌آپ می‌سازد (و در پایان پاک می‌کند):
+/root/pasarguard_backup.sh
 
-/root/backuper_marzneshin
-
-/root/backuper_marzban
-
-/root/backuper_pasarguard
-
-/root/backuper_x-ui
-
-⏱️ زمان‌بندی (Cron)
-
-داخل مرحله نصب، شما می‌توانید بازه بک‌آپ را انتخاب کنید:
-
-هر N دقیقه: */N * * * *
-
-هر N ساعت: 0 */N * * *
-
-Cron job به صورت خودکار روی root crontab ثبت می‌شود.
-
-📤 ارسال به تلگرام (Telegram)
-
-فایل بک‌آپ با متد sendDocument ارسال می‌شود.
-
-اگر حجم فایل بیش از 50MB شود، یک پیام هشدار برای شما ارسال می‌کند.
-
-کپشن گزارش (Report) شامل:
-
-نام اسکریپت
-
-IP سرور
-
-تاریخ
-
-نام پنل
-
-نوع دیتابیس
-
-مسیرهایی که بک‌آپ شده‌اند
-
-حجم بک‌آپ
-
-توجه: توکن و Chat ID داخل فایل اسکریپت بک‌آپ ذخیره می‌شود. (امنیت را در نظر بگیرید.)
-
-🔁 Transfer Backup (انتقال بک‌آپ بین دو سرور)
-
-این بخش برای مهاجرت/کلون کردن تنظیمات از Server A (منبع) به Server B (مقصد) است.
-
-قبل از انتقال، اسکریپت روی مقصد برخی مسیرها را حذف و دوباره ایجاد می‌کند.
-
-انتقال با rsync انجام می‌شود.
-
-در پایان، روی مقصد دستور Restart پنل اجرا می‌شود:
-
-marzneshin restart
-
-marzban restart
-
-pasarguard restart
-
-x-ui restart
-
-نکته خیلی مهم: این عملیات می‌تواند داده‌های موجود روی سرور مقصد را پاک کند. قبل از انتقال، از مقصد بک‌آپ بگیرید.
-
-🌳 نمودار شاخه‌ای (ساختار کلی اسکریپت)
-Backup-Transfor.sh
-├─ Pretty UI + Helpers
-│  ├─ supports_color / banner / menu_item / info / ok / warn / die
-│  └─ need_root / pause / prompt
-├─ install_requirements
-│  └─ apt update/upgrade + install packages
-├─ DB Detection
-│  ├─ detect_db_type()            → Marzneshin (docker-compose.yml)
-│  ├─ detect_db_type_Marzban()    → Marzban (.env)
-│  └─ detect_db_type_pasarguard() → Pasarguard (.env)
-├─ Backup Script Generators
-│  ├─ create_backup_script()              → Marzneshin
-│  ├─ create_backup_script_Marzban()      → Marzban
-│  ├─ create_backup_script_pasarguard()   → Pasarguard
-│  └─ create_backup_script_x_ui()         → X-ui
-├─ Main Actions (Menu)
-│  ├─ install_backuper   → ساخت اسکریپت + cron + بک‌آپ اولیه + تلگرام
-│  ├─ remove_backuper    → حذف اسکریپت‌ها + حذف cron + پاکسازی پوشه‌ها
-│  ├─ run_script         → اجرای دستی بک‌آپ
-│  └─ transfer_backup    → انتقال به سرور مقصد + restart
-└─ main_menu
-   └─ install_requirements سپس نمایش منو
-
-🧭 فلوچارت (Mermaid) — منوی اصلی
-
-گیت‌هاب از Mermaid پشتیبانی می‌کند. اگر در نمایش مشکل داشتید، از Tree بالا استفاده کنید.
-
-flowchart TD
-    A([Start]) --> B[Install Requirements<br/>apt update/upgrade + install deps]
-    B --> C{Main Menu}
-    C -->|1 Install Backuper| D[Choose Panel Type<br/>Marzneshin / Pasarguard / X-ui / Marzban]
-    D --> E[Get Telegram Token + Chat ID + Compression + Caption]
-    E --> F[Set Cron Interval<br/>Minutes or Hours]
-    F --> G[Detect DB Type]
-    G --> H[Generate Panel Backup Script<br/>/root/*_backup.sh]
-    H --> I[Save Config + Cron Job]
-    I --> J[Run First Backup + Send to Telegram]
-    C -->|2 Remove Backuper| K[Delete scripts + remove cron + cleanup dirs]
-    C -->|3 Run Script| L[Run existing /root/*_backup.sh]
-    C -->|4 Transfer Backup| M[Select Panel + Remote Credentials]
-    M --> N[Pre-check local paths]
-    N --> O[Remote cleanup + rsync transfer]
-    O --> P[Remote restart panel]
-    C -->|5 Exit| Q([Exit])
-
-🔐 نکات امنیتی و پیشنهادها
-
-ابزار sshpass باعث می‌شود رمز عبور در فرایند/کامند استفاده شود. برای امنیت بهتر:
-
-پیشنهاد: انتقال را با SSH Key انجام دهید (اگر قصد توسعه دارید).
-
-توکن تلگرام داخل فایل بک‌آپ ذخیره می‌شود:
-
-دسترسی فایل‌های /root/*_backup.sh را محدود کنید: chmod 700
-
-بخش Transfer روی مقصد داده‌ها را حذف می‌کند:
-
-قبل از اجرا روی مقصد بک‌آپ داشته باشید.
-
-🛠️ رفع خطاهای رایج
-
-SSH connection error:
-
-IP/یوزر/پسورد را بررسی کنید
-
-پورت SSH (معمولاً 22) باز باشد
-
-سرویس sshd فعال باشد
-
-DB dump failed:
-
-اطلاعات DB در .env یا docker-compose.yml را بررسی کنید
-
-سرویس DB در حال اجرا باشد
-
-mysqldump / pg_dump نصب باشد
-
-Backup too large:
-
-نوع فشرده‌سازی را 7z انتخاب کنید
-
-ارسال تلگرام ممکن است محدودیت حجم داشته باشد
+/root/x-ui_backup.sh
