@@ -1,5 +1,4 @@
-🇬🇧 English Documentation
-✅ Features
+
 
 Interactive terminal UI (colors, menus)
 
