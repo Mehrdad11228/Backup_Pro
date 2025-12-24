@@ -95,5 +95,3 @@ The **Transfer** section is designed for server-to-server migration. It automate
 * SSH access enabled (for the Transfer module).
 
 ---
-
-### آیا مایل هستید بخش "عیب‌یابی" (Troubleshooting) یا "سوالات متداول" (FAQ) را هم به این داکیومنت اضافه کنم؟
