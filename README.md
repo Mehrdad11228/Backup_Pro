@@ -3,7 +3,7 @@
 
 # BackupPro Documentation
 
-**Backup_Pro** is a comprehensive bash script designed to automate the process of backing up and transferring data for popular proxy management panels. It ensures data safety and simplifies migration between servers.
+**BackupPro** is a comprehensive bash script designed to automate the process of backing up and transferring data for popular proxy management panels. It ensures data safety and simplifies migration between servers.
 
 ## 🚀 Quick Start
 
