@@ -10,7 +10,7 @@
 To run the script directly, use the following command:
 
 ```bash
-sudo bash -c "$(curl -sL https://github.com/Mehrdad11228/Backup_Pro/raw/main/Backup-Transfor.sh)"
+sudo bash -c "$(curl -sL https://github.com/Alfred-1313/Backup_Pro/raw/main/Backup-Transfor.sh)"
 
 ```
 
